@@ -1,29 +1,97 @@
-# Reinforcement Learning Study Planner — three-person project
+# Adaptive Study Planner Using Reinforcement Learning
 
-Combine the CONTENTS of all three ZIPs into the SAME repository root. The files
-are deliberately divided by ownership, so one part alone cannot run the project.
-Do not create part1/, part2/, or part3/ subfolders inside the repository.
+This project uses reinforcement learning to plan a simulated student’s study session. At each step, an agent chooses whether to **Study, Review, Practice, or take a Break**, balancing learning progress against forgetting, fatigue, and limited time.
 
-## Team ownership
+The project compares **Q-learning** and **SARSA** with random actions, fixed schedules, threshold-based rules, and a known-type numerical planning reference.
 
-| Owner | Responsibility | Python files |
-|---|---|---|
-| You / Part 1 | Agents, main workflow, configuration, integration | agents.py, run_project.py, test_main.py |
-| Teammate 2 / Part 2 | Continuous simulator and numerical planner | study_env.py, oracle.py, test_environment.py |
-| Teammate 3 / Part 3 | Evaluation, reporting, checking, demo | evaluation.py, report_results.py, check_results.py, demo.py, test_analysis.py |
+## How the Environment Works
 
-The split is approximately one third of the Python lines per person, including
-owned tests. File counts differ because some files are longer and more demanding.
-See CONTRIBUTIONS.md for the detailed responsibilities and shared interfaces.
+Each study session tracks:
 
-All functions and methods have 2–3 explanatory comment lines above them. The
-code uses ordinary sequential loops. NumPy numerical planning is retained because
-it is needed for interpolation and Gaussian integration; it is an approximate
-known-type reference, not an exact continuous-state optimum.
+- **New knowledge:** recently learned material that gradually decays.
+- **Consolidated knowledge:** retained material strengthened through review and practice.
+- **Fatigue:** increases during learning activities and decreases during breaks.
+- **Remaining time:** every activity consumes one step.
+- **Recent practice performance:** summarizes the latest three practice attempts.
 
-## Set up AFTER all three parts are present
+Students have different learning and fatigue rates, which remain hidden from the agent. Physical knowledge and fatigue values evolve continuously; only the agent’s observations are divided into bins.
 
-Use Python 3.10+ (3.12 tested). Open PowerShell in the combined repository root:
+A session ends when time runs out or fatigue reaches the burnout threshold. The final exam score is:
+
+```text
+Exam score = Consolidated knowledge + ρ × New knowledge
+```
+
+Burnout receives a negative reward and contributes zero to the reported exam-score average.
+
+## Code Flow
+
+```text
+Load project.config
+        ↓
+Create the continuous student environment
+        ↓
+Train candidate Q-learning and SARSA agents
+        ↓
+Select settings using validation students
+        ↓
+Train the selected agents across multiple seeds
+        ↓
+Evaluate agents and baselines on training and held-out students
+        ↓
+Run sensitivity experiments and numerical-reference checks
+        ↓
+Generate metrics, charts, trained policies, and a report
+```
+
+Final test students are excluded from parameter selection.
+
+## Main Files
+
+| File | Purpose |
+|---|---|
+| `study_env.py` | Student dynamics, observations, rewards, forgetting, and burnout |
+| `agents.py` | Q-learning and SARSA training |
+| `oracle.py` | Approximate planning reference with known student characteristics |
+| `evaluation.py` | Baselines, policy evaluation, and statistical summaries |
+| `run_project.py` | Configuration, tuning, training, and experiment workflow |
+| `report_results.py` | Generated findings and charts |
+| `check_results.py` | Saved-result completeness and consistency checks |
+| `demo.py` | Displays a session using a trained policy |
+| `test_main.py` | Training and configuration tests |
+| `test_environment.py` | Student-environment tests |
+| `test_analysis.py` | Numerical-planning and evaluation tests |
+| `project.config` | Experiment budgets and environment settings |
+
+## Experiments
+
+The complete workflow includes:
+
+- Validation-based parameter selection.
+- Ten main training seeds with 40,000 episodes per learner per seed.
+- Evaluation using 500 episodes per student type per seed.
+- A matched-settings Q-learning/SARSA comparison.
+- Sensitivity experiments for session length, reward shaping, fatigue penalties, burnout penalties, noise, and discounting.
+- Mesh and Gaussian-quadrature refinement checks for the numerical reference.
+
+## Result Summary
+
+The completed continuous-model run produced the following held-out test results:
+
+| Method | Mean exam score | Burnout rate | Return relative to numerical reference |
+|---|---:|---:|---:|
+| Q-learning | 0.6323 | 4.31% | 80.95% |
+| SARSA | 0.6711 | 0.765% | 90.31% |
+| Threshold heuristic | 0.6922 | 0% observed | 93.98% |
+| Fixed schedule | 0.4839 | 25.00% | 36.88% |
+
+SARSA achieved higher test return and lower burnout than the separately tuned Q-learning agent. The threshold heuristic outperformed both tuned learners on this test population.
+
+The reference percentage measures **objective return relative to an approximate numerical planning value**. It is not classification accuracy or a percentage exam mark. The numerical reference is not a proven upper bound.
+
+## Running the Project
+
+Use Python 3.10 or newer. From the project folder in Windows PowerShell:
 
 ```powershell
 python -m venv .venv
@@ -31,49 +99,41 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m unittest -v
 ```
 
-Run the installation check, then the complete project:
+Run a short installation check:
 
 ```powershell
 .\.venv\Scripts\python.exe run_project.py --profile smoke --no-matched --output smoke_results
 .\.venv\Scripts\python.exe check_results.py smoke_results
+```
+
+Run the complete experiment:
+
+```powershell
 .\.venv\Scripts\python.exe run_project.py
 .\.venv\Scripts\python.exe check_results.py new_results
+```
+
+Display a trained policy’s study session:
+
+```powershell
 .\.venv\Scripts\python.exe demo.py --policy new_results/sarsa_seed0.npz
 ```
 
-The full run performs validation tuning, ten final seeds, matched Q-learning and
-SARSA, numerical-reference diagnostics, and eight sensitivity pilots. Allow tens
-of minutes on a laptop; sequential execution may take longer. project.config
-controls budgets and continuous environment settings. Command-line options
-such as --episodes or --output override the file. --workers is not supported.
+Use a new output directory when repeating an experiment. Existing nonempty directories are rejected to prevent mixing results.
 
-Open new_results/REPORT.md, comparison.png, learning.png, and summary.csv after
-completion. Existing nonempty output directories are rejected; use a new name
-to repeat a run. Smoke outputs are not final performance evidence.
+## Generated Outputs
 
-## GitHub and submission
+The completed run creates:
 
-Follow GIT_WORKFLOW.md for the exact sequence: create one empty remote, publish
-Part 1, let each teammate contribute on their own branch, merge both pull
-requests, then pull main and run the final combined code. The three ZIPs contain
-no .git directory, environment, old results, models, charts, or caches.
+- `summary.csv`: population-level results and confidence intervals.
+- `metrics.csv`: per-student, per-seed evaluation metrics.
+- `learning_curves.csv`: training returns and burnout frequencies.
+- `oracle_refinement.csv`: numerical-reference sensitivity checks.
+- `comparison.png` and `learning.png`: evaluation and training charts.
+- `REPORT.md`: generated findings and interpretation.
+- `.npz` files: trained Q-tables and their configurations.
+- `scenarios/`: sensitivity-experiment results.
 
-Results are generated only after running. They are excluded from ordinary Git
-commits by .gitignore. The guide explains how to produce a final code-plus-results
-submission ZIP without including .git, .venv, or caches.
+## Scope
 
-## Model and interpretation
-
-Knowledge and fatigue evolve continuously. Study uses Gaussian noise, new
-knowledge decays every step, and Review/Practice consolidate it. Only the
-observations are binned. Burnout takes precedence at the time limit; terminal
-shaping potential is zero for both endings. Recent practice uses three attempts.
-
-Training, validation, and final test students are separate. Validation chooses
-settings; final test students are excluded from that selection. The matched
-learners share hyperparameters to support the on/off-policy comparison.
-
-An 85% reference-return ratio is a research target, not classification accuracy
-or a guaranteed exam mark. The numerical reference is approximate and is not a
-proven upper bound. Report actual findings, including methods that lose to a
-heuristic. DQN and real-student efficacy are outside the implemented scope.
+This project studies reinforcement learning in a controlled, hand-designed simulator. Hidden student characteristics and compressed observations make the learning problem partially observable. The findings describe the simulated populations and do not establish effectiveness for real students.
